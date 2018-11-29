@@ -18,7 +18,7 @@ class CartPoleSim:
     # This is obviously a hack
     abs_dir = '/Users/sgillen/work_dir/sgillen_notebooks/ICRA2019/cartpole/'
 
-    def __init__(self, xml_file: str = (abs_dir + 'cartpole.xml')):
+    def __init__(self, xml_file = (abs_dir + 'cartpole.xml')):
         model_xml = open(xml_file).read()
         model = mj.load_model_from_xml(model_xml)  # sim has it's own model you can access, sim.model
 
