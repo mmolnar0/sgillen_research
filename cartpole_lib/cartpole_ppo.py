@@ -29,6 +29,3 @@ def train(env_id, num_timesteps, seed=0):
 if __name__ == '__main__':
     logger.configure(dir = "./tensorboard_test", format_strs=["tensorboard"] )
     pi = train('InvertedPendulum-v2', num_timesteps=5000, seed=0)
-
-
-
