@@ -20,7 +20,7 @@ gast==0.2.0
 glfw==1.7.0
 grpcio==1.16.0
 gym==0.10.8
--e git+https://gitlab.com/robo_lab/gym_ucsb_robolab@6a6158306c6d0872a143d2e593509b20571c0898#egg=gym_ucsb_robolab
+-e git+https://github.com/sgillen/gym_ucsb_robolab#egg=gym_ucsb_robolab
 h5py==2.8.0
 idna==2.7
 imageio==2.4.1
@@ -74,7 +74,6 @@ Send2Trash==1.5.0
 six==1.11.0
 tensorboard==1.11.0
 tensorflow==1.11.0
-tensorflow-gpu==1.11.0
 termcolor==1.1.0
 terminado==0.8.1
 testpath==0.4.2
