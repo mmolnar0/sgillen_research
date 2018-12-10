@@ -1,14 +1,6 @@
 # Notebooks
 
-This is a collection of various python notebooks I use for research. I'll try to keep this readme relatively up to date but you know how things go
-
-The top level notebooks are usually early prototypes that aren't developed enough to justify their own folder yet
-
-* dm_control - some work to interface with deepminds control suite
-* drake_examples - various examples using drake I've made or that I've gotten from the underactuated course notes
-* walkers - trajectory optimization for planar walkers using drake, also includes playback in mujoco
-* robosimian - same idea as walkers but for the robosimian (this is much more a work in progress)
-* misc - miscellaneous scratch work
+This is a collection of various pieces of software I use for research. 
 
 # Various libraries I use (that you will need to install)
 
