@@ -1,10 +1,6 @@
 # Notebooks
 
-<<<<<<< HEAD
 This is a collection of various pieces of software I use for research. 
-=======
-This is a collection of various peices of software I use for research. 
->>>>>>> 4c45f63ca6b84d95debe51b76c6d5ced6455a6f3
 
 # Various libraries I use (that you will need to install)
 
