@@ -23,8 +23,11 @@ function [dX,u] = acrobot_eom(t,X,obj)
             M21 = obj.L1*obj.L2c*obj.m2*cos(th1 - th2);
             M22 = obj.J2 + obj.L2c^2*obj.m2; 
             
+            %C1 = obj.g*obj.m1*cos(th1)*obj.L1c + obj.L2c*obj.m2*sin(th1 - th2)*dth2^2*obj.L1 ;
+            %C2 = obj.g*obj.L2c*obj.m2*cos(th2) +  dth1^2*obj.L1*obj.L2c*obj.m2*sin(th1 - th2);
+            
             C1 = obj.g*obj.m1*cos(th1)*obj.L1c + obj.L2c*obj.m2*sin(th1 - th2)*dth2^2*obj.L1 ;
-            C2 = obj.g*obj.L2c*obj.m2*cos(th2) +  dth1^2*obj.L1*obj.L2c*obj.m2*sin(th1 - th2);
+            C2 = obj.g*obj.L2c*obj.m2*cos(th1 + th2) +  dth1^2*obj.L1*obj.L2c*obj.m2*sin(th1 - th2);
             
             
             M = [M11, M12; M21, M22];
@@ -39,7 +42,10 @@ function [dX,u] = acrobot_eom(t,X,obj)
             % TODO, unwrap our angles
             
             umat = [0; 1]; % Which EOMs does u affect?
-            d2th = M \ (-C + umat*u);
+            
+            b = .01;
+            B = [-b*X(3); -b*X(4)]; %Let's throw some damping in
+            d2th = M \ (-C + umat*u + B);
 %            if(rcond(M) < 1e-15)
 %                d2th
 %            end
