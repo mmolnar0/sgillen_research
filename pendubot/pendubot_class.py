@@ -21,12 +21,17 @@ class Acrobot:
         pass
 
     # animation generation
-    def animate_pend(self, y):
+    def animate_pend(self, t, y):
+    
+        y = y.T
+    
+        dt = (t[-1] - t[0])/len(t)
+     
         th1 = y[:, 0]
         th2 = y[:, 1]
-
+        
         x1 = self.L1 * cos(th1)
-        y1 = self.L1 * sin(th2)
+        y1 = self.L1 * sin(th1)
 
         x2 = self.L2 * cos(th1 + th2) + x1
         y2 = self.L2 * sin(th1 + th2) + y1
@@ -42,10 +47,10 @@ class Acrobot:
         time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
 
         def init():
-            line1.set_data([], [])
-            line2.set_data([], [])
+            line1.set_data([0, x1[0]], [0 , y1[0]])
+            line2.set_data([x1[0], x2[0]], [y1[0], y2[0]])
             time_text.set_text('')
-            return line1, line2, time_text
+            return [line1, line2, time_text]
 
         def animate(i):
             line1.set_data([0, x1[i]], [0, y1[i]])
@@ -54,12 +59,11 @@ class Acrobot:
             time_text.set_text(time_template % (i * dt))
             return [line1, line2, time_text]
 
-        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=40, blit=True, init_func=init)
+        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=5, blit=True, init_func=init)
 
 
     #@jit(nopython=False)
     def control(self, q,t=0):
-        print("1")
         return 0
 
 
@@ -77,13 +81,13 @@ class Acrobot:
         dth2 = q[3]
 
         # Inertia matrix (M) and conservative torque terms (C)
-        M11 = J1 + m2 * L1 ** 2 + m1 * m1 * L1c ** 2
-        M12 = L2c * m2 * cos(th1 - th2) * L1
-        M21 = L1 * L2c * m2 * cos(th1 - th2)
-        M22 = J2 + L2c ** 2 * m2
+        M11 = self.J1 + self.m2 * self.L1 ** 2 + self.m1 * self.m1 * self.L1c ** 2
+        M12 = self.L2c * self.m2 * cos(th1 - th2) * self.L1
+        M21 = self.L1 * self.L2c * self.m2 * cos(th1 - th2)
+        M22 = self.J2 + self.L2c ** 2 * self.m2
 
-        C1 = g * m1 * cos(th1) * L1c + L2c * m2 * sin(th1 - th2) * dth2 ** 2 * L1
-        C2 = g * L2c * m2 * cos(th2 + th1) + dth1 ** 2 * L1 * L2c * m2 * sin(th1 - th2)
+        C1 = self.g * self.m1 * cos(th1) * self.L1c + self.L2c * self.m2 * sin(th1 - th2) * dth2 ** 2 * self.L1
+        C2 = self.g * self.L2c * self.m2 * cos(th2 + th1) + dth1 ** 2 * self.L1 * self.L2c * self.m2 * sin(th1 - th2)
 
         M = np.array([[M11, M12], [M21, M22]])
         C = np.array([C1, C2])
