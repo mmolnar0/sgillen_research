@@ -17,19 +17,17 @@ class Acrobot:
         self.J1 = 1; self.J2 = 1;
 
         self.g = 9.8;
-        self.rad = np.pi / 1
-        pass
 
     # animation generation
     def animate_pend(self, t, y):
-    
+
         y = y.T
-    
+
         dt = (t[-1] - t[0])/len(t)
-     
+
         th1 = y[:, 0]
         th2 = y[:, 1]
-        
+
         x1 = self.L1 * cos(th1)
         y1 = self.L1 * sin(th1)
 
