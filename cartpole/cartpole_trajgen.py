@@ -1,3 +1,5 @@
+# sgillen This was Ty's original implementation of the cartpole simulation and contro
+
 # ball: m = 1 kg
 # pole: L = 1 m
 # cart: M = 4 kg
