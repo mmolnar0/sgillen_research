@@ -16,8 +16,6 @@ L = 1.0  # length of the pole (m)
 M = 4.0  # mass of the cart (kg)
 m = 1  # mass of the ball at the end of the pole (kg)
 
-rad = np.pi / 180
-
 
 # control input: u = F
 # q is the state vector
