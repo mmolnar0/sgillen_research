@@ -26,7 +26,7 @@ options = trainingOptions('adam', ...
 sigy = std(y)
 
 
-ytrain = (y)/sigy
+%ytrain = (y)/sigy
+ytrain = rem(y,pi)
 
-
-trainedNet = trainNetwork(y',tau',layers,options)
+trainedNet = trainNetwork(ytrain',tau',layers,options)
