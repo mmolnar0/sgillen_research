@@ -123,3 +123,4 @@ dmypy.jso
 *.data*
 *tfevent*
 **/tensorboard_logs/
+**None*png*
