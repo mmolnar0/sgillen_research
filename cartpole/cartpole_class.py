@@ -30,7 +30,7 @@ class Cartpole:
         y2 = -self.L * cos(y[:, 0]) + y1
 
         fig = plt.figure()
-        ax = fig.add_subplot(111, autoscale_on=False, aspect='equal', \
+        ax = fig.add_subplot(111, autoscale_on=False, aspect='equal',
                              xlim=(-3, 3), ylim=(-3, 3))
         ax.grid()
 
