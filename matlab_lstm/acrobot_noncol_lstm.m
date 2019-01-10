@@ -15,7 +15,8 @@ numResponses = 1;
 
 layers = [ ...
     sequenceInputLayer(numFeatures)
-    lstmLayer(numHiddenUnits)   
+    %lstmLayer(numHiddenUnits)   
+    fullyConnectedLayer(numHiddenUnits)
     fullyConnectedLayer(numResponses)
     regressionLayer];
 

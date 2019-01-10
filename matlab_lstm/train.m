@@ -27,6 +27,6 @@ sigy = std(y)
 
 
 %ytrain = (y)/sigy
-ytrain = rem(y,pi)
+%ytrain = rem(y,pi)
 
 trainedNet = trainNetwork(ytrain',tau',layers,options)
