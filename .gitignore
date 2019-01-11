@@ -124,3 +124,4 @@ dmypy.jso
 *tfevent*
 **/tensorboard_logs/
 **None*png*
+*.mat
