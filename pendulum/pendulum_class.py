@@ -19,8 +19,6 @@ import scipy.integrate as integrate
 
 
 
-
-
 from numba import jit
 import time
 class Pendulum:
@@ -63,16 +61,16 @@ class Pendulum:
 
     #@jit(nopython=False)
     # default controller does nothing, overwrite this with something useful
-    def control(self, q,t=0):
+    def control(self, t,q):
         return 0
 
 
     # state vector: q = transpose([theta, d(theta)/dt])
     # TODO, unwrap our angles
     #@jit(nopython=False)
-    def derivs(self, q, t):
+    def derivs(self, t, q):
 
-        u = np.clip(self.control(q, t), -5, 5)
+        u =self.control(t, q)
 
         d2th = (-self.g*sin(q[0]) + u)/self.L
         ret = np.array([q[1], d2th])

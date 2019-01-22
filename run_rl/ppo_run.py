@@ -5,7 +5,7 @@ from baselines import logger
 import os
 from baselines.ppo1 import pposgd_simple
 
-import sgillen_research.policies.mlp_relu_policy as mlp_relu_policy
+import policies.mlp_relu_policy as mlp_relu_policy
 
 # Needed for saving
 import datetime, time
