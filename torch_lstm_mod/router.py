@@ -56,121 +56,80 @@ class Router(nn.Module):
         yb = self.k(x)
     
         return ys, yb, d
-    
 
+def select_action(x, policy):
+    x = torch.from_numpy(x).float().unsqueeze(0)
 
-#net = Router(2,4,4)
-#(ys, yb, d) = net(torch.randn(2))
-#print("g1: ", g1)
-#print("g2: ", g2)
-#print("d: ", d)
-#print("x:", x)
-#print()
-#print("G1", net.r_linear1)
-#print("G2", net.r_linear2)
+    ys, yb, d = policy(x)
+    m = torch.distributions.Categorical(d)
+    path = m.sample()
 
+    policy.saved_log_probs.append(m.log_prob(path))
 
-#action = select_action(np.random.randn(2),net)
+    #if path.item() == 0:
+    #    return ys.item()
+    #else:
+    #    return yb.item()
+    return yb.item()
 
+    # Calculates the time weighted rewards, policy losses, and optimizers
 
-# In[21]:
+# This is a confusing name...
+def finish_episode(policy):
+    R = 0
+    policy_loss = []
+    rewards = []
 
+    gamma = .5
+    for r in policy.rewards[::-1]:
+        R = r + gamma * R
+        rewards.append(R)
 
-# def fixed_step(self,u):
-#     th, thdot = self.state # th := theta
+    rewards = rewards[::-1]
+    rewards = torch.tensor(rewards)
 
-#     g = 10.
-#     m = 1.
-#     l = 1.
-#     dt = self.dt
+    std = rewards.std()
+    if torch.isnan(std):
+        std = 1
 
-#     u = np.clip(u, -self.max_torque, self.max_torque)
-#     self.last_u = u # for rendering
-#     costs = angle_normalize(th)**2 + .1*thdot**2 + .001*(u**2)
+    rewards = (rewards - rewards.mean()) / (std + eps)
 
-#     newthdot = thdot + (-3*g/(2*l) * np.sin(th + np.pi) + 3./(m*l**2)*u) * dt
-#     newth = th + newthdot*dt
-#     newthdot = np.clip(newthdot, -self.max_speed, self.max_speed) #pylint: disable=E1111
+    for log_prob, reward in zip(policy.saved_log_probs, rewards):
+        policy_loss.append(-log_prob * reward)
 
-#     self.state = np.array([newth, newthdot])
-#     return self._get_obs(), -costs, False, {}
+    optimizer.zero_grad()
+    policy_loss = torch.cat(policy_loss).sum()
+    policy_loss.backward()
+    optimizer.step()
 
-
-
-# In[32]:
-
+    del policy.rewards[:]
+    del policy.saved_log_probs[:]
 
 
 if __name__ == '__main__':
         
-    def select_action(x, policy):
-            x = torch.from_numpy(x).float().unsqueeze(0)
-
-            ys, yb, d = policy(x)
-            m = torch.distributions.Categorical(d)
-            path = m.sample()
-
-            policy.saved_log_probs.append(m.log_prob(path))
-
-            if path.item() == 0:
-                return ys.item()
-            else:
-                return yb.item()
-
-        
-        
-        
-    # Calculates the time weighted rewards, policy losses, and optimizers
-    def finish_episode(policy):
-        R = 0
-        policy_loss = []
-        rewards = []
-
-        gamma = .5
-        for r in policy.rewards[::-1]:
-            R = r + gamma*R
-            rewards.append(R)
-
-        rewards = rewards[::-1]
-        rewards = torch.tensor(rewards)
-
-        std = rewards.std()
-        if torch.isnan(std):
-            std = 1
-
-        rewards = (rewards - rewards.mean())/(std + eps)
-
-        for log_prob, reward in zip(policy.saved_log_probs, rewards):
-            policy_loss.append(-log_prob * reward)
-
-        optimizer.zero_grad()
-        policy_loss = torch.cat(policy_loss).sum()
-        policy_loss.backward()
-        optimizer.step()
-
-        del policy.rewards[:]
-        del policy.saved_log_probs[:]
 
 
     
     # Just Naive REINFORCE for pendulum env. 
-    env = gym.make('Pendulum-v0')
+    env = gym.make('InvertedPendulum-v2')
 
     #env.step = fixed_step.__get__(env, gym.Env)
     #env.seed(args.seed)
     #torch.manual_seed(args.seed)
 
-    policy = Router(3,8,5)
+    policy = Router(input_size = 4, hidden_size = 8, router_size = 8, output_size = 1)
+
     optimizer = optim.Adam(policy.parameters(), lr=1e-2)
 
-
+    num_episodes = int(2e5)
 
     running_reward = 10
-    for i_episode in count(1):
+    for i_episode in range(num_episodes):
         state = env.reset()
         for t in range(10000):
             action = select_action(state, policy)
-            state,reward, done, _ = env.step(np.array([action, 0]))
+            state,reward, done, _ = env.step(action)
 
             policy.rewards.append(reward)
             if done:
@@ -180,13 +139,19 @@ if __name__ == '__main__':
             finish_episode(policy) 
 
 
-            log_interval = 10
+        log_interval = 100
+        if i_episode % log_interval == 0:
+            print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
+                i_episode, t, running_reward))
 
-            if i_episode % log_interval == 0:
-                print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
-                    i_episode, t, running_reward))
-            #if running_reward > env.spec.reward_threshold:
-            #    print("Solved! Running reward is now {} and "
-            #          "the last episode runs to {} time steps!".format(running_reward, t))
-            #    break
+
+
+
+    state = env.reset()
+    while(True):
+        action = select_action(state, policy)
+        state,reward, done, _ = env.step(action)
+        env.render()
+        if done:
+            state = env.reset()
 
