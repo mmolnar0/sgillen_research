@@ -8,18 +8,60 @@ import time
 
 
 class Cartpole:
-    # Define constants (geometry and mass properties):
+    """
+    Implements dynamics, animation, and control for for a simple cartpole pendulum.
 
+    Meant as a testbed for different controllers, the default controller (implemented in control) does a pretty good job
+    though.
+
+    The default constructor just goes, I find it more convenient to just go ahead and construct an object and then c
+    change parameters after the fact.
+
+    I.E.
+
+    cart = Cartpole()
+    cart.L = 5.0
+
+    Attributes:
+        L - length of the pendulum in (m)
+        mc - mass of the kart (kg)
+        mp - magnitude of pointmass at the end of the cart's pole (kg)
+        g - force f gravity (N)
+    
+    """
+
+    # Define constants (geometry and mass properties):
     def __init__(self):
         self.L = 1.0;  # length of the pole (m)
-        self.mc = 4.0  # length of the cart (kg)
-        self.mp = 1.0  # Mass of the ball at the end of the pole
+        self.mc = 4.0  # mass of the cart (kg)
+        self.mp = 1.0  # mass of the ball at the end of the pole
 
         self.g = 9.8;
 
 
-    # animation generation
+    # TODO, refacter to switch t,y -> y,t to be consitent with the derivs
     def animate_cart(self, t, y):
+        """
+        constructs an animation object and returns it to the user.
+
+        Then depending on your environment you'll need to do some other call to actually display the animation.
+        usually I'm calling this from a jupyter notebook, in which case I do:
+
+
+
+        ani = bot.animate_cart(time, y)
+        HTML(ani.to_jshtml())
+
+
+
+        :param t: numpy array with the time steps corresponding to the trajectory you want to animate, does not have to
+        be uniform
+
+        :param y: numpy array with a trajectory of state variables you want animated. [theta , x, thetadot, xdot]
+
+        :return: matplotlib.animation, which you then need to display
+        """
+
         dt = (t[-1] - t[0])/len(t)
 
 
@@ -57,6 +99,16 @@ class Cartpole:
 
     # @jit(nopython=False)
     def control(self, q):
+        """
+        This is where you should define the control for the cartpole, called by derivs.
+
+        By default, implements a swingup controller for the cartpole based on energy shaping. Switches to an LQR to
+        balance the pendulum
+
+        :param q: numpy array of state variables [theta, x, thetadot, xdot]
+        :return: u, the control torque in N*m
+        """
+
         if (q[0] < 140 * pi/180) or (q[0] > 220 * pi/180 ):
             # swing up
             # energy error: Ee
@@ -81,6 +133,19 @@ class Cartpole:
     # state vector: q = transpose([theta, x, d(theta)/dt, dx/dt])
     # @jit(nopython=False)
     def derivs(self, q, t):
+        """
+        Implements the dynamics for our cartpole, you need to integrate this yourself with E.G:
+
+        y = integrate.odeint(bot.derivs, init_state, time)
+
+        or whatever other ode solver you prefer.
+
+
+        :param q: numpy array of state variables [theta, x, thetadot, xdot]
+        :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
+        :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
+        """
+
         dqdt = np.zeros_like(q)
 
         # control input
