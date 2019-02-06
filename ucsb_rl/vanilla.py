@@ -7,6 +7,9 @@ from torch.distributions import Categorical
 import matplotlib.pyplot as plt
 from tqdm import trange
 
+
+torch.set_default_dtype(torch.double)
+
 # ============================================================================================
 
 env_name = 'CartPole-v0'
@@ -25,11 +28,19 @@ policy = nn.Sequential(
     nn.Softmax(dim=-1)
 )
 
-optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+value_fn = nn.Sequential(
+    nn.Linear(4,12),
+    nn.Tanh(),
+    nn.Linear(12,12),
+    nn.Tanh(),
+    nn.Linear(12,1)
+)
+policy_optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+value_optimizer = optim.Adam(value_fn.parameters(), lr=1e-2)
 
-num_epochs = 500
-batch_size = 2000  # how many steps we want to use before we update our gradients
-num_steps = 1000  # number of steps in an episode (unless we terminate early)
+num_epochs = 100
+batch_size = 500  # how many steps we want to use before we update our gradients
+num_steps = 200  # number of steps in an episode (unless we terminate early)
 
 # ============================================================================================
 
@@ -40,11 +51,10 @@ def select_action(policy, state):
     m = Categorical(policy(torch.Tensor(state)))
     action = m.sample()
     logprob = m.log_prob(action)
-
     return action.detach().numpy(), logprob
 
 
-# def vanilla_policy_grad(env, policy, optimizer):
+# def vanilla_policy_grad(env, policy, policy_optimizer):
 
 env = gym.make(env_name)
 avg_reward_hist = []
@@ -61,6 +71,7 @@ for epoch in trange(num_epochs):
         state = env.reset()
         logprob_list = []
         reward_list = []
+        state_list = []
 
         for t in range(num_steps):
 
@@ -69,6 +80,7 @@ for epoch in trange(num_epochs):
 
             logprob_list.append(-logprob)
             reward_list.append(reward)
+            state_list.append(state)
 
             total_steps += 1
 
@@ -79,14 +91,25 @@ for epoch in trange(num_epochs):
         # Now Calculate cumulative rewards for each action
         action_rewards = torch.tensor([sum(reward_list[i:]) for i in range(len(reward_list))])
         logprob_t = torch.stack(logprob_list)
-        loss = torch.sum(logprob_t * action_rewards)
-        loss.backward()
+
+        value_preds = value_fn(torch.tensor(state_list)).squeeze()
+        policy_rewards = (action_rewards - value_preds)
+
+        policy_loss = torch.sum(logprob_t * policy_rewards)
+        policy_loss.backward(retain_graph=True)
+
+        value_loss = torch.sum(value_preds - action_rewards)
+        value_loss.backward(retain_graph=True)
 
         episode_reward_sum.append(sum(reward_list))
 
         if total_steps > batch_size:
-            optimizer.step()
-            optimizer.zero_grad()
+            policy_optimizer.step()
+            policy_optimizer.zero_grad()
+
+            value_optimizer.step()
+            value_optimizer.zero_grad()
+
             avg_reward_hist.append(sum(episode_reward_sum) / len(episode_reward_sum))
             break
 
