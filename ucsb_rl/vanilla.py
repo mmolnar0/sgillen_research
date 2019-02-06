@@ -1,17 +1,37 @@
-
-# coding: utf-8
-
-# In[1]:
-
-
 import gym
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
-
 import matplotlib.pyplot as plt
+from tqdm import trange
+
+# ============================================================================================
+
+env_name = 'CartPole-v0'
+
+# Hard coded policy for the cartpole problem
+# Will eventually want to build up infrastructure to develop a policy depending on:
+# env.action_space
+# env.observation_space
+
+policy = nn.Sequential(
+    nn.Linear(4, 12),
+    nn.Tanh(),
+    #nn.Linear(12, 12),
+    #nn.Tanh(),
+    nn.Linear(12, 2),
+    nn.Softmax(dim=-1)
+)
+
+optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+
+num_epochs = 500
+batch_size = 2000  # how many steps we want to use before we update our gradients
+num_steps = 1000  # number of steps in an episode (unless we terminate early)
+
+# ============================================================================================
 
 
 # I guess we'll start with a categorical policy
@@ -24,104 +44,55 @@ def select_action(policy, state):
     return action.detach().numpy(), logprob
 
 
-def main():
+# def vanilla_policy_grad(env, policy, optimizer):
 
-    env_name = 'CartPole-v0'
-    env = gym.make(env_name)
-
-
-    # Hard coded policy for the cartpole problem
-    # Will eventually want to build up infrastructure to develop a policy depending on:
-    # env.action_space
-    # env.observation_space
-
-    policy = nn.Sequential(
-        nn.Linear(4, 12),
-        nn.ReLU(),
-        nn.Linear(12,12),
-        nn.ReLU(),
-        nn.Linear(12,2),
-        nn.Softmax(dim=-1)
-        )
-
-    optimizer = optim.Adam(policy.parameters(), lr = .1)
-    policy(torch.randn(1,4))
-
-    #def vanilla_policy_grad(env, policy, optimizer):
-
-    action_list = []
-    state_list = []
-    logprob_list = []
-    reward_list = []
-
-    avg_reward_hist = []
-
-    num_epochs = 10000
-    #batch_size = 20 # how many steps we want to use before we update our gradients
-    num_steps = 100 # number of steps in an episode (unless we terminate early)
-
-    loss = torch.zeros(1,requires_grad=True)
-
-    for epoch in range(num_epochs):
-
-        # Probably just want to preallocate these with zeros, as either a tensor or an array
-        loss_hist = []
-        episode_length_hist = []
-        action_list = []
-        total_steps = 0
-
-        while True:
-
-            state = env.reset()
-            logprob_list = []
-            reward_list = []
-            action_list = []
-
-            for t in range(num_steps):
-
-                action, logprob = select_action(policy, state)
-                state, reward, done, _ = env.step(action.item())
-
-                logprob_list.append(-logprob)
-                reward_list.append(reward)
-                action_list.append(action)
-                total_steps += 1
-
-                if done:
-                    break
-
-            # Now Calculate cumulative rewards for each action
-            episode_length_hist.append(t)
-            reward_ar = np.array(reward_list)
-            logprob_ar = np.array(logprob_list)
-
-            episode_loss = [np.sum(reward_ar[i:]*logprob_ar[i:]) for i in range(len(reward_list))]
-
-            avg_reward_hist.append(sum(episode_length_hist) / len(episode_length_hist))
-            # loss = torch.sum(torch.stack(loss_hist))
-            for action in episode_loss:
-                action.backward(retain_graph = True)
-                optimizer.step()
-
-    print('hello')
-    return policy
+env = gym.make(env_name)
+avg_reward_hist = []
 
 
-def render_loop(env, policy):
+for epoch in trange(num_epochs):
+
+    # Probably just want to preallocate these with zeros, as either a tensor or an array
+    episode_reward_sum = []
+    total_steps = 0
+
     while True:
+
         state = env.reset()
-        cum_rewards = 0
+        logprob_list = []
+        reward_list = []
 
-        while True:
-            action, _ = select_action(policy,state)
+        for t in range(num_steps):
+
+            action, logprob = select_action(policy, state)
             state, reward, done, _ = env.step(action.item())
-            env.render()
 
-            cum_rewards += reward
+            logprob_list.append(-logprob)
+            reward_list.append(reward)
+
+            total_steps += 1
+
             if done:
-                print('summed reward for espisode: ', cum_rewards)
                 break
 
 
-if __name__ == '__main__':
-    main()
+        # Now Calculate cumulative rewards for each action
+        action_rewards = torch.tensor([sum(reward_list[i:]) for i in range(len(reward_list))])
+        logprob_t = torch.stack(logprob_list)
+        loss = torch.sum(logprob_t * action_rewards)
+        loss.backward()
+
+        episode_reward_sum.append(sum(reward_list))
+
+        if total_steps > batch_size:
+            optimizer.step()
+            optimizer.zero_grad()
+            avg_reward_hist.append(sum(episode_reward_sum) / len(episode_reward_sum))
+            break
+
+
+# ============================================================================================
+
+plt.plot(avg_reward_hist)
+plt.title('new')
+plt.show()
