@@ -31,13 +31,19 @@ class Cartpole:
     """
 
     # Define constants (geometry and mass properties):
-    def __init__(self):
+    def __init__(self, dt=None, Ts=None, n=None):
         self.L = 1.0;  # length of the pole (m)
         self.mc = 4.0  # mass of the cart (kg)
         self.mp = 1.0  # mass of the ball at the end of the pole
 
         self.g = 9.8;
-
+       
+        self.Ts = Ts
+        self.n = n;
+        self.dt = dt
+        self.tNext = 0
+        self.u_hold = []
+        self.y_lb = []
 
     # TODO, refacter to switch t,y -> y,t to be consitent with the derivs
     def animate_cart(self, t, y):
@@ -132,6 +138,7 @@ class Cartpole:
 
     # state vector: q = transpose([theta, x, d(theta)/dt, dx/dt])
     # @jit(nopython=False)
+    
     def derivs(self, q, t):
         """
         Implements the dynamics for our cartpole, you need to integrate this yourself with E.G:
@@ -163,5 +170,149 @@ class Cartpole:
         dqdt[3] = self.mp * self.L * (q[2] ** 2) * sin(q[0]) / delta \
                   + self.mp * self.L * self.g * sin(q[0]) * cos(q[0]) / delta / self. L \
                   + u / delta
-
+                  
         return dqdt
+    
+    def derivs_dig(self, q, t):
+        """
+        Implements the dynamics for our cartpole, you need to integrate this yourself with E.G:
+    
+        y = integrate.odeint(bot.derivs, init_state, time)
+    
+        or whatever other ode solver you prefer.
+    
+        :param q: numpy array of state variables [theta, x, thetadot, xdot]
+        :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
+        :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
+        """
+    
+        if(t>=self.tNext):    #<>
+            self.tNext += self.Ts*self.dt
+            self.u_hold = self.control(q)
+            
+        dqdt = np.zeros_like(q)
+        
+        delta = self.mp * sin(q[0]) ** 2 + self.mc
+    
+        dqdt[0] = q[2]
+        dqdt[1] = q[3]
+        
+        dqdt[2] = - self.mp * (q[2] ** 2) * sin(q[0]) * cos(q[0]) / delta \
+                      - (self.mp + self.mc) * self.g * sin(q[0]) / delta / self.L \
+                      - self.u_hold * cos(q[0]) / delta / self.L
+    
+        dqdt[3] = self.mp * self.L * (q[2] ** 2) * sin(q[0]) / delta \
+                  + self.mp * self.L * self.g * sin(q[0]) * cos(q[0]) / delta / self. L \
+                  + self.u_hold / delta
+  
+        return dqdt
+    
+    def derivs_dig_lb(self, q, t):
+        """
+        Implements the dynamics for our cartpole, you need to integrate this yourself with E.G:
+
+        y = integrate.odeint(bot.derivs, init_state, time)
+
+        or whatever other ode solver you prefer.
+
+
+        :param q: numpy array of state variables [theta, x, thetadot, xdot]
+        :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
+        :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
+        """
+
+        if(t==0):
+            z_ext = np.zeros((q.size,(self.n-1)*self.Ts))
+            self.y_lb = np.concatenate((z_ext, q[:,np.newaxis]), axis=1) 
+            self.tNext = self.Ts*self.dt
+            self.u_lb = self.control(self.y_lb)
+        else:
+            if(t>=self.tNext):    #<>
+                self.tNext += self.Ts*self.dt
+                self.y_lb = np.concatenate((self.y_lb[:,1:],q[:,np.newaxis]), axis=1)
+                self.u_lb = self.control(self.y_lb)
+                
+        dqdt = np.zeros_like(q)
+    
+        delta = self.mp * sin(q[0]) ** 2 + self.mc
+
+        dqdt[0] = q[2]
+        dqdt[1] = q[3]
+        
+        dqdt[2] = - self.mp * (q[2] ** 2) * sin(q[0]) * cos(q[0]) / delta \
+                      - (self.mp + self.mc) * self.g * sin(q[0]) / delta / self.L \
+                      - self.u_lb * cos(q[0]) / delta / self.L
+    
+        dqdt[3] = self.mp * self.L * (q[2] ** 2) * sin(q[0]) / delta \
+                  + self.mp * self.L * self.g * sin(q[0]) * cos(q[0]) / delta / self. L \
+                  + self.u_lb / delta
+  
+        return dqdt
+    
+    def animate_cart_21(self, t, y):
+        """
+        constructs an animation object and returns it to the user.
+
+        Then depending on your environment you'll need to do some other call to actually display the animation.
+        usually I'm calling this from a jupyter notebook, in which case I do:
+
+
+
+        ani = bot.animate_cart(time, y)
+        HTML(ani.to_jshtml())
+
+
+
+        :param t: numpy array with the time steps corresponding to the trajectory you want to animate, does not have to
+        be uniform
+
+        :param y: numpy array with a trajectory of state variables you want animated. [theta , x, thetadot, xdot]
+
+        :return: matplotlib.animation, which you then need to display
+        """
+
+        dt = (t[-1] - t[0])/len(t)
+
+
+        x1 = y[:, 1]
+        y1 = 0.0
+
+        x2 = self.L * sin(y[:, 0]) + x1
+        y2 = -self.L * cos(y[:, 0]) + y1
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(211, autoscale_on=False, aspect='equal',
+                             xlim=(-3, 3), ylim=(-3, 3))
+        ax2 = fig.add_subplot(212, autoscale_on=False, aspect='equal',
+                             xlim=(-3, 3), ylim=(-3, 3))
+        ax1.grid()
+        ax2.grid()
+        
+        line1, = ax1.plot([], [], 'o-', lw=2)
+        time1_template = 'time = %.1fs'
+        time1_text = ax1.text(0.05, 0.9, '', transform=ax1.transAxes)
+        
+        line2, = ax1.plot([], [], 'o-', lw=2)
+        time2_template = 'time = %.1fs'
+        time2_text = ax1.text(0.05, 0.9, '', transform=ax2.transAxes)
+        
+
+        def init():
+            line1.set_data([], [])
+            time1_text.set_text('')
+            line2.set_data([], [])
+            time1_text.set_text('')
+            return line1, time1_text, line2, time2_text
+
+
+        def animate(i):
+            thisx = [x1[i], x2[i]]
+            thisy = [y1, y2[i]]
+
+            line1.set_data(thisx, thisy)
+            time1_text.set_text(time1_template % (i * dt))
+            line2.set_data(thisx, thisy)
+            time2_text.set_text(time2_template % (i * dt))
+            return line1, time1_text, line2, time2_text
+
+        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=40, blit=True, init_func=init)
