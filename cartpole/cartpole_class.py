@@ -248,71 +248,95 @@ class Cartpole:
                   + self.u_lb / delta
   
         return dqdt
-    
-    def animate_cart_21(self, t, y):
+
+    def animate_cart_dim(self, t, Y, LABEL_ROWS,LABEL_COLS, info):
         """
         constructs an animation object and returns it to the user.
 
         Then depending on your environment you'll need to do some other call to actually display the animation.
         usually I'm calling this from a jupyter notebook, in which case I do:
 
+        
 
-
-        ani = bot.animate_cart(time, y)
+        ani = bot.animate_cart(time, t, Y, LABEL_ROWS,LABEL_COLS, info)
         HTML(ani.to_jshtml())
-
-
 
         :param t: numpy array with the time steps corresponding to the trajectory you want to animate, does not have to
         be uniform
 
-        :param y: numpy array with a trajectory of state variables you want animated. [theta , x, thetadot, xdot]
+        :param Y: 4D-Numpy matrix with numpy arrays containing trajectories of state variables you want animated.
+        Last two dimensions for selecting the numpy array trajectories [theta , x, thetadot, xdot] of dimension [Nx4] with N
+        as the number of trajectory samples.
+        
+        :param LABEL_ROWS, LABEL_COLS: Row and Column labels for subplots grid
+        
+        :param info: 2D list with strings for having an info text at the respective position in the subplots
 
         :return: matplotlib.animation, which you then need to display
         """
-
-        dt = (t[-1] - t[0])/len(t)
-
-
-        x1 = y[:, 1]
-        y1 = 0.0
-
-        x2 = self.L * sin(y[:, 0]) + x1
-        y2 = -self.L * cos(y[:, 0]) + y1
-
+        #Convert row and col to linear index
+        def sub2ind(array_shape, rows, cols):
+            return rows*array_shape[1] + cols +1
+        
+        dt = (t[-1] - t[0])/len(t)              #Get time step
+        dim_sub = Y.shape[2:4]                  #shape of subplot grid
+        N = Y.shape[0]                          #Number of samples
+        Nplot = dim_sub[0]*dim_sub[1]           #Number of subplots
+        
+        #Initialize variables plot points, axes, lines and text
+        X1 = np.zeros((N, dim_sub[0], dim_sub[1]))
+        Y1 = 0
+        X2 = np.zeros((N, dim_sub[0], dim_sub[1]))
+        Y2 = np.zeros((N, dim_sub[0], dim_sub[1]))
+        AX = [[0 for x in range(dim_sub[1])] for y in range(dim_sub[0])] 
+        LINE = [0 for x in range(Nplot)]
+        TIME_TEXT = [0 for x in range(Nplot)]
+        time_template = 'time = %.1fs'    
+        
         fig = plt.figure()
-        ax1 = fig.add_subplot(211, autoscale_on=False, aspect='equal',
+        
+        #Iterate trough all trajectories and create plot points, subplots, info texts and time
+        for i in range(0,dim_sub[0]):
+            for j in range(0,dim_sub[1]):
+                #Trajectories to plot points
+                X1[:,i,j] = Y[:,1,i,j]
+                X2[:,i,j] = self.L * sin(Y[:,0,i,j]) + X1[:,i,j]
+                Y2[:,i,j] = -self.L * cos(Y[:,0,i,j]) + Y1
+                #Subplots
+                AX[i][j]  = fig.add_subplot(dim_sub[0], dim_sub[1], sub2ind(dim_sub,i,j), autoscale_on=False, aspect='equal',
                              xlim=(-3, 3), ylim=(-3, 3))
-        ax2 = fig.add_subplot(212, autoscale_on=False, aspect='equal',
-                             xlim=(-3, 3), ylim=(-3, 3))
-        ax1.grid()
-        ax2.grid()
-        
-        line1, = ax1.plot([], [], 'o-', lw=2)
-        time1_template = 'time = %.1fs'
-        time1_text = ax1.text(0.05, 0.9, '', transform=ax1.transAxes)
-        
-        line2, = ax1.plot([], [], 'o-', lw=2)
-        time2_template = 'time = %.1fs'
-        time2_text = ax1.text(0.05, 0.9, '', transform=ax2.transAxes)
-        
-
+                AX[i][j].grid()
+                #Labels for columns and rows
+                if i==0:
+                    AX[i][j].set_title(LABEL_COLS[j])
+                if j==0:
+                    AX[i][j].text(-0.2, 0.55, LABEL_ROWS[i], transform=AX[i][j].transAxes, rotation=90)
+                #Create line objects
+                LINE[sub2ind(dim_sub,i,j)-1], = AX[i][j].plot([], [], 'o-', lw=2)
+                #Add info text to plot
+                AX[i][j].text(0.05, 0.1, info[i][j], transform=AX[i][j].transAxes)
+                #Add time text to plot
+                TIME_TEXT[sub2ind(dim_sub,i,j)-1] = AX[i][j].text(0.05, 0.9, '', transform=AX[i][j].transAxes)
+        #Append text objects to line objects (necessary for using matplotlib FuncAnimation)         
+        LINE += TIME_TEXT
+        #Init for FuncAnimation
         def init():
-            line1.set_data([], [])
-            time1_text.set_text('')
-            line2.set_data([], [])
-            time1_text.set_text('')
-            return line1, time1_text, line2, time2_text
+            
+            for i in range(0,dim_sub[0]):
+                for j in range(0,dim_sub[1]):
+                    LINE[sub2ind(dim_sub,i,j)-1].set_data([],[])
+                    LINE[Nplot+sub2ind(dim_sub,i,j)-1].set_text('')
+            return LINE
+        #During animation adapt plot and time text
+        def animate(k):
 
+            for i in range(0,dim_sub[0]):
+                for j in range(0,dim_sub[1]):
+                    thisx = [X1[k,i,j], X2[k,i,j]]
+                    thisy = [Y1,Y2[k,i,j]]
+                    LINE[sub2ind(dim_sub,i,j)-1].set_data(thisx, thisy)
+                    LINE[Nplot+sub2ind(dim_sub,i,j)-1].set_text(time_template % (k * dt))
+            return LINE
 
-        def animate(i):
-            thisx = [x1[i], x2[i]]
-            thisy = [y1, y2[i]]
-
-            line1.set_data(thisx, thisy)
-            time1_text.set_text(time1_template % (i * dt))
-            line2.set_data(thisx, thisy)
-            time2_text.set_text(time2_template % (i * dt))
-            return line1, time1_text, line2, time2_text
-
-        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=40, blit=True, init_func=init)
+        return animation.FuncAnimation(fig, animate, np.arange(1, N), interval=5, blit=True, init_func=init)
+    
