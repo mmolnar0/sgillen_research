@@ -2,6 +2,7 @@ import numpy as np
 from numpy import cos, sin, pi
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import scipy.integrate as integrate
 
 from numba import jit
 import time
@@ -31,22 +32,34 @@ class Cartpole:
     """
 
     # Define constants (geometry and mass properties):
-    def __init__(self, dt=None, Ts=None, n=None):
+    def __init__(self, time, u_max):
         self.L = 1.0;  # length of the pole (m)
         self.mc = 4.0  # mass of the cart (kg)
         self.mp = 1.0  # mass of the ball at the end of the pole
-
+        self.time = time
+        self.dt = time[1]-time[0]
         self.g = 9.8;
+        self.u_max = u_max
        
-        self.Ts = Ts
-        self.n = n;
-        self.dt = dt
+        self.Ts = []
+        self.look_back = [];
         self.tNext = 0
         self.u_hold = []
         self.y_lb = []
-
+        self.verbose = 0
+        
+        # State deviation considered as okay
+        theta = pi*1.02
+        x = 0.02
+        th_dot = 0.02
+        xdot = 0.02
+    
+        # Respective error (euclidean norm)
+        final_state_dev = np.array([theta, x, th_dot, xdot])
+        self.final_state = np.array([pi, 0, 0, 0])
+        self.err_final = np.sqrt(np.sum((final_state_dev-self.final_state)**2))
     # TODO, refacter to switch t,y -> y,t to be consitent with the derivs
-    def animate_cart(self, t, y):
+    def animate_cart(self, y):
         """
         constructs an animation object and returns it to the user.
 
@@ -67,9 +80,6 @@ class Cartpole:
 
         :return: matplotlib.animation, which you then need to display
         """
-
-        dt = (t[-1] - t[0])/len(t)
-
 
         x1 = y[:, 1]
         y1 = 0.0
@@ -98,10 +108,10 @@ class Cartpole:
             thisy = [y1, y2[i]]
 
             line.set_data(thisx, thisy)
-            time_text.set_text(time_template % (i * dt))
+            time_text.set_text(time_template % (i * self.dt))
             return line, time_text
 
-        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=40, blit=True, init_func=init)
+        return animation.FuncAnimation(fig, animate, np.arange(1, len(y)), interval=self.dt*1000, blit=True, init_func=init)
 
     # @jit(nopython=False)
     def control(self, q):
@@ -134,7 +144,7 @@ class Cartpole:
             k3 = 41.772
             k4 = -8.314
             u = -(k1 * (q[0] - pi) + k2 * q[1] + k3 * q[2] + k4 * q[3])
-        return u
+        return min(self.u_max, max(-self.u_max,u))
 
     # state vector: q = transpose([theta, x, d(theta)/dt, dx/dt])
     # @jit(nopython=False)
@@ -152,11 +162,14 @@ class Cartpole:
         :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
         :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
         """
-
+        if(self.verbose):
+            print('Time', t)    
         dqdt = np.zeros_like(q)
 
         # control input
         u = self.control(q)
+        
+        self.u_hist.append(u)
 
         delta = self.mp * sin(q[0]) ** 2 + self.mc
 
@@ -185,10 +198,13 @@ class Cartpole:
         :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
         :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
         """
-    
+        if(self.verbose):
+            print('Time', t)
         if(t>=self.tNext):    #<>
             self.tNext += self.Ts*self.dt
             self.u_hold = self.control(q)
+            
+        self.u_hist.append(self.u_hold)    
             
         dqdt = np.zeros_like(q)
         
@@ -220,9 +236,10 @@ class Cartpole:
         :param t: float with the current time (not actually used but most ODE solvers want to pass this in anyway)
         :return: numpy array with the derivatives of the current state variable [thetadot, xdot, theta2dot, x2dot]
         """
-
+        if(self.verbose):
+            print('Time', t)
         if(t==0):
-            z_ext = np.zeros((q.size,(self.n-1)*self.Ts))
+            z_ext = np.zeros((q.size,(self.look_back-1)*self.Ts))
             self.y_lb = np.concatenate((z_ext, q[:,np.newaxis]), axis=1) 
             self.tNext = self.Ts*self.dt
             self.u_lb = self.control(self.y_lb)
@@ -231,6 +248,8 @@ class Cartpole:
                 self.tNext += self.Ts*self.dt
                 self.y_lb = np.concatenate((self.y_lb[:,1:],q[:,np.newaxis]), axis=1)
                 self.u_lb = self.control(self.y_lb)
+        
+        self.u_hist.append(self.u_lb)
                 
         dqdt = np.zeros_like(q)
     
@@ -249,7 +268,7 @@ class Cartpole:
   
         return dqdt
 
-    def animate_cart_dim(self, t, Y, LABEL_ROWS,LABEL_COLS, info):
+    def animate_cart_dim(self, Y, LABEL_ROWS,LABEL_COLS, info):
         """
         constructs an animation object and returns it to the user.
 
@@ -278,7 +297,7 @@ class Cartpole:
         def sub2ind(array_shape, rows, cols):
             return rows*array_shape[1] + cols +1
         
-        dt = (t[-1] - t[0])/len(t)              #Get time step
+        dt = (self.time[-1] - self.time[0])/len(self.time)              #Get time step
         dim_sub = Y.shape[2:4]                  #shape of subplot grid
         N = Y.shape[0]                          #Number of samples
         Nplot = dim_sub[0]*dim_sub[1]           #Number of subplots
@@ -338,5 +357,189 @@ class Cartpole:
                     LINE[Nplot+sub2ind(dim_sub,i,j)-1].set_text(time_template % (k * dt))
             return LINE
 
-        return animation.FuncAnimation(fig, animate, np.arange(1, N), interval=5, blit=True, init_func=init)
+        return animation.FuncAnimation(fig, animate, np.arange(1, N), interval=dt*1000, blit=True, init_func=init)
     
+    def simulate_ES_control(self):
+        ## Run a bunch of trials using the energy shaping controller
+        # TODO: update this to the method I defined in misc/dimension_test
+        
+        # parameters for the amount of different trajectories we generate with the energy shaping controller
+        num_trials = 1
+        num_states = 4
+        num_t = len(self.time)
+        y = np.zeros((num_t, num_states, num_trials))
+        
+        for i in range(num_trials):
+            # initial conditions
+            theta = 0
+            x = 0.0
+            th_dot = 2*(i/num_trials) - 1 
+            xdot = 0.0
+        
+            # initial state
+            self.init_state = np.array([theta, x, th_dot, xdot])
+            self.u_hist = []
+            # integrate the ODE using scipy.integrate.
+            # TODO switch over to the more modern solve_ivp, as we do for the pendubot
+            y[:, :, i] = integrate.odeint(self.derivs, self.init_state, self.time)
+            u = np.zeros((y.shape[0],1))
+            for t in range(len(self.time)):
+                    u[t] = self.control(y[t]) 
+                
+        return y, u
+    def expert(self, y):
+            u = np.zeros((y.shape[0],1))
+            for t in range(len(self.time)):
+                    u[t] = self.controlES(y[t])
+            return u
+    def simulate_NN_control(self, net, netType, Ts = None, look_back = None):
+
+        self.u_hist = []
+        self.Ts = Ts
+        if(netType == 'FF'):
+            # Feed forward 
+            self.control = self.make_ff_controller(net)
+            # Run the simulation for the feedforward network
+            # Fill in our u after the fact..
+            y = integrate.odeint(self.derivs_dig, self.init_state, self.time, hmax = self.dt/3) 
+        elif(netType == 'FFLB'):
+            # Feed forward with looking back
+            self.control = self.make_fflb_controller(net, look_back)                
+            # Run the simulation for the Feedforward look back network
+            # integrate the ODE using scipy.integrate.
+            # Fill in our u after the fact..
+            self.look_back = look_back
+            y = integrate.odeint(self.derivs_dig_lb, self.init_state, self.time, hmax = self.dt/3)
+        elif(netType == 'LSTM'):
+            # Long short-term memory
+            self.control = self.make_lstm_controller(net, look_back)
+            # integrate the ODE using scipy.integrate.
+            # Fill in our u after the fact..
+            self.look_back = look_back
+            y = integrate.odeint(self.derivs_dig_lb, self.init_state, self.time,  hmax = self.dt/3)     
+        return y, self.u_hist
+    
+    def make_controller(self, model):
+        def nn_controller(q):
+            if (q[0] < (140 * (pi/180)) ) or (q[0] > (220 * (pi/180)) ):
+                u = model.predict(q.reshape((1,4,1)))
+            else:
+                # balancing
+                # LQR: K values from MATLAB
+                k1 = 140.560
+                k2 = -3.162
+                k3 = 41.772
+                k4 = -8.314
+                u = -(k1 * (q[0] - pi) + k2 * q[1] + k3 * q[2] + k4 * q[3])
+            return min(self.u_max, max(-self.u_max,u))
+            
+        return nn_controller
+    
+    
+    # an ugly hack TODO make this and the one above compatible
+    def make_ff_controller(self, model):
+        def nn_controller(q):
+            if (q[0] < (140 * (pi/180)) ) or (q[0] > (220 * (pi/180)) ):
+                u = model.predict(q.reshape(1,4))
+                u =  u[0][0]
+            else:
+                # balancing
+                # LQR: K values from MATLAB
+                k1 = 140.560
+                k2 = -3.162
+                k3 = 41.772
+                k4 = -8.314
+                u = -(k1 * (q[0] - pi) + k2 * q[1] + k3 * q[2] + k4 * q[3])
+            return min(self.u_max, max(-self.u_max,u))
+            
+        return nn_controller
+    
+    def make_fflb_controller(self, model, look_back):
+        def nn_controller(q):
+            if (q[0,look_back-1] < (140 * (pi/180)) ) or (q[0,look_back-1] > (220 * (pi/180)) ):
+                u = model.predict(q.reshape(1,q.shape[0],q.shape[1]))
+                u = u[0][0]
+            else:
+                # balancing
+                # lqr: k values from matlab
+                k1 = 140.560
+                k2 = -3.162
+                k3 = 41.772
+                k4 = -8.314
+                u = -(k1 * (q[0,look_back-1] - pi) + k2 * q[1,look_back-1] + k3 * q[2,look_back-1] + k4 * q[3,look_back-1])
+            return min(self.u_max, max(-self.u_max,u))
+            
+        return nn_controller
+    
+    def make_lstm_controller(self, model, look_back):
+        def nn_controller(q):
+            if (q[0,look_back-1] < (140 * (pi/180)) ) or (q[0,look_back-1] > (220 * (pi/180)) ):
+                q = np.swapaxes(q,0,1)
+                u = model.predict(q.reshape(1,q.shape[0],q.shape[1]))
+                u = u[0][0]
+            else:
+                # balancing
+                # lqr: k values from matlab
+                k1 = 140.560
+                k2 = -3.162
+                k3 = 41.772
+                k4 = -8.314
+                u = -(k1 * (q[0,look_back-1] - pi) + k2 * q[1,look_back-1] + k3 * q[2,look_back-1] + k4 * q[3,look_back-1])
+            return min(self.u_max, max(-self.u_max,u))
+        
+        return nn_controller
+    
+    
+    def calc_feat(self, y):
+
+        # remove sign
+        y_abs = np.abs(y)
+        # remove periodicity of angle
+        y_abs[:,0] = np.mod(y_abs[:,0], 2*pi)
+        
+        err = np.sqrt(np.sum((y_abs-self.final_state)**2,1))
+        
+        t_err = None
+        for i in range(0,len(err)):
+            if((err[i]<=self.err_final)&(t_err==None)):
+                t_err = self.time[i]
+            if(self.err_final<err[i]):
+                t_err = None
+                
+        return t_err
+            
+            
+   # @jit(nopython=False)
+    def controlES(self, q):
+        """
+        This is where you should define the control for the cartpole, called by derivs.
+
+        By default, implements a swingup controller for the cartpole based on energy shaping. Switches to an LQR to
+        balance the pendulum
+
+        :param q: numpy array of state variables [theta, x, thetadot, xdot]
+        :return: u, the control torque in N*m
+        """
+
+        if (q[0] < 140 * pi/180) or (q[0] > 220 * pi/180 ):
+            # swing up
+            # energy error: Ee
+            Ee = 0.5 * self.mp * self.L * self.L * q[2] ** 2 - self.mp * self.g * self.L * (1 + cos(q[0]))
+            # energy control gain:
+            k = 0.23
+            # input acceleration: A (of cart)
+            A = k * Ee * cos(q[0]) * q[2]
+            # convert A to u (using EOM)
+            delta = self.mp * sin(q[0]) ** 2 + self.mc
+            u = A * delta - self.mp * self.L * (q[2] ** 2) * sin(q[0]) - self.mp * self.g * sin(q[2]) * cos(q[2])
+        else:
+            # balancing
+            # LQR: K values from MATLAB
+            k1 = 140.560
+            k2 = -3.162
+            k3 = 41.772
+            k4 = -8.314
+            u = -(k1 * (q[0] - pi) + k2 * q[1] + k3 * q[2] + k4 * q[3])
+        return min(self.u_max, max(-self.u_max,u))
+            
+            
